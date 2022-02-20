@@ -5,6 +5,8 @@ import com.tripolskypetr.quitejs 1.0
 Item {
     id: flex
 
+    property int contentHeight: height
+
     property int minHeight: 0
     property int minWidth: 0
 
@@ -32,6 +34,10 @@ Item {
     property string flexWrap: "noWrap"
 
     property string flexDirection: "row"
+
+    property bool autoHeight: true
+
+    height: autoHeight ? -1 : height
 
     FlexBackend{ id: backend }
 
@@ -276,6 +282,7 @@ Item {
             var node = {}
             var child = {}
             var i = 0;
+
             for (i=0;i!==flex.children.length;i++) {
                 node = backend.createNode();
                 child = flex.children[i];
@@ -287,7 +294,8 @@ Item {
                 nodes.push(node);
             }
             rootNode.appendChildren(nodes);
-            rootNode.calculateLayoutLtr(flex.width, flex.height);
+            let fHeight = flex.autoHeight ? -1 : flex.height
+            rootNode.calculateLayoutLtr(flex.width, fHeight);
             /* console.log(JSON.stringify({root: rootNode})); */
             for (i=0;i!==flex.children.length;i++) {
                 node = nodes[i];
@@ -295,9 +303,13 @@ Item {
                 flex.children[i].y = node.getLayoutTop();
                 flex.children[i].width = node.getLayoutWidth();
                 flex.children[i].height = node.getLayoutHeight();
-                /* console.log(JSON.stringify(node)); */
             }
+
             backend.collectGarbage(rootNode);
+
+
+            flex.contentHeight = rootNode.getLayoutHeight();
+
             return true;
         } else {
             return false;
