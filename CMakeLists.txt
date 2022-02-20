@@ -15,13 +15,10 @@ qt6_add_qml_module(QtYoga
         CompactValue.h
         YGConfig.h     
         YGConfig.cpp       
-        YGMarker.h
-        YGMarker.cpp
         YGValue.h     
         YGValue.cpp  
         YGLayout.h
         YGLayout.cpp            
-        instrumentation.h  
         YGEnums.h
         YGEnums.cpp        
         YGNode.h

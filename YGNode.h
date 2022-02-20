@@ -1,12 +1,17 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under the MIT license found in the LICENSE
- * file in the root directory of this source tree.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
+
 #pragma once
+
+#ifdef __cplusplus
+
 #include <cstdint>
 #include <stdio.h>
+#include "BitUtils.h"
 #include "CompactValue.h"
 #include "YGConfig.h"
 #include "YGLayout.h"
@@ -16,22 +21,24 @@
 
 YGConfigRef YGConfigGetDefault();
 
-struct YGNode {
+struct YOGA_EXPORT YGNode {
   using MeasureWithContextFn =
       YGSize (*)(YGNode*, float, YGMeasureMode, float, YGMeasureMode, void*);
   using BaselineWithContextFn = float (*)(YGNode*, float, float, void*);
   using PrintWithContextFn = void (*)(YGNode*, void*);
 
 private:
+  static constexpr size_t hasNewLayout_ = 0;
+  static constexpr size_t isReferenceBaseline_ = 1;
+  static constexpr size_t isDirty_ = 2;
+  static constexpr size_t nodeType_ = 3;
+  static constexpr size_t measureUsesContext_ = 4;
+  static constexpr size_t baselineUsesContext_ = 5;
+  static constexpr size_t printUsesContext_ = 6;
+  static constexpr size_t useWebDefaults_ = 7;
+
   void* context_ = nullptr;
-  bool hasNewLayout_ : 1;
-  bool isReferenceBaseline_ : 1;
-  bool isDirty_ : 1;
-  YGNodeType nodeType_ : 1;
-  bool measureUsesContext_ : 1;
-  bool baselineUsesContext_ : 1;
-  bool printUsesContext_ : 1;
-  bool useWebDefaults_ : 1;
+  uint8_t flags = 1;
   uint8_t reserved_ = 0;
   union {
     YGMeasureFunc noContext;
@@ -63,13 +70,13 @@ private:
   void setBaselineFunc(decltype(baseline_));
 
   void useWebDefaults() {
-    useWebDefaults_ = true;
+    facebook::yoga::detail::setBooleanData(flags, useWebDefaults_, true);
     style_.flexDirection() = YGFlexDirectionRow;
     style_.alignContent() = YGAlignStretch;
   }
 
   // DANGER DANGER DANGER!
-  // If the the node assigned to has children, we'd either have to deallocate
+  // If the node assigned to has children, we'd either have to deallocate
   // them (potentially incorrect) or ignore them (danger of leaks). Only ever
   // use this after checking that there are no children.
   // DO NOT CHANGE THE VISIBILITY OF THIS METHOD!
@@ -79,17 +86,8 @@ private:
 
 public:
   YGNode() : YGNode{YGConfigGetDefault()} {}
-  explicit YGNode(const YGConfigRef config)
-      : hasNewLayout_{true},
-        isReferenceBaseline_{false},
-        isDirty_{false},
-        nodeType_{YGNodeTypeDefault},
-        measureUsesContext_{false},
-        baselineUsesContext_{false},
-        printUsesContext_{false},
-        useWebDefaults_{config->useWebDefaults},
-        config_{config} {
-    if (useWebDefaults_) {
+  explicit YGNode(const YGConfigRef config) : config_{config} {
+    if (config->useWebDefaults) {
       useWebDefaults();
     }
   };
@@ -116,9 +114,13 @@ public:
 
   void print(void*);
 
-  bool getHasNewLayout() const { return hasNewLayout_; }
+  bool getHasNewLayout() const {
+    return facebook::yoga::detail::getBooleanData(flags, hasNewLayout_);
+  }
 
-  YGNodeType getNodeType() const { return nodeType_; }
+  YGNodeType getNodeType() const {
+    return facebook::yoga::detail::getEnumData<YGNodeType>(flags, nodeType_);
+  }
 
   bool hasMeasureFunc() const noexcept { return measure_.noContext != nullptr; }
 
@@ -144,7 +146,9 @@ public:
 
   uint32_t getLineIndex() const { return lineIndex_; }
 
-  bool isReferenceBaseline() { return isReferenceBaseline_; }
+  bool isReferenceBaseline() {
+    return facebook::yoga::detail::getBooleanData(flags, isReferenceBaseline_);
+  }
 
   // returns the YGNodeRef that owns this YGNode. An owner is used to identify
   // the YogaTree that a YGNode belongs to. This method will return the parent
@@ -177,7 +181,9 @@ public:
 
   YGConfigRef getConfig() const { return config_; }
 
-  bool isDirty() const { return isDirty_; }
+  bool isDirty() const {
+    return facebook::yoga::detail::getBooleanData(flags, isDirty_);
+  }
 
   std::array<YGValue, 2> getResolvedDimensions() const {
     return resolvedDimensions_;
@@ -186,6 +192,17 @@ public:
   YGValue getResolvedDimension(int index) const {
     return resolvedDimensions_[index];
   }
+
+  static CompactValue computeEdgeValueForColumn(
+      const YGStyle::Edges& edges,
+      YGEdge edge,
+      CompactValue defaultValue);
+
+  static CompactValue computeEdgeValueForRow(
+      const YGStyle::Edges& edges,
+      YGEdge rowEdge,
+      YGEdge edge,
+      CompactValue defaultValue);
 
   // Methods related to positions, margin, padding and border
   YGFloatOptional getLeadingPosition(
@@ -225,17 +242,22 @@ public:
 
   void setPrintFunc(YGPrintFunc printFunc) {
     print_.noContext = printFunc;
-    printUsesContext_ = false;
+    facebook::yoga::detail::setBooleanData(flags, printUsesContext_, false);
   }
   void setPrintFunc(PrintWithContextFn printFunc) {
     print_.withContext = printFunc;
-    printUsesContext_ = true;
+    facebook::yoga::detail::setBooleanData(flags, printUsesContext_, true);
   }
   void setPrintFunc(std::nullptr_t) { setPrintFunc(YGPrintFunc{nullptr}); }
 
-  void setHasNewLayout(bool hasNewLayout) { hasNewLayout_ = hasNewLayout; }
+  void setHasNewLayout(bool hasNewLayout) {
+    facebook::yoga::detail::setBooleanData(flags, hasNewLayout_, hasNewLayout);
+  }
 
-  void setNodeType(YGNodeType nodeType) { nodeType_ = nodeType; }
+  void setNodeType(YGNodeType nodeType) {
+    return facebook::yoga::detail::setEnumData<YGNodeType>(
+        flags, nodeType_, nodeType);
+  }
 
   void setMeasureFunc(YGMeasureFunc measureFunc);
   void setMeasureFunc(MeasureWithContextFn);
@@ -244,11 +266,11 @@ public:
   }
 
   void setBaselineFunc(YGBaselineFunc baseLineFunc) {
-    baselineUsesContext_ = false;
+    facebook::yoga::detail::setBooleanData(flags, baselineUsesContext_, false);
     baseline_.noContext = baseLineFunc;
   }
   void setBaselineFunc(BaselineWithContextFn baseLineFunc) {
-    baselineUsesContext_ = true;
+    facebook::yoga::detail::setBooleanData(flags, baselineUsesContext_, true);
     baseline_.withContext = baseLineFunc;
   }
   void setBaselineFunc(std::nullptr_t) {
@@ -264,7 +286,8 @@ public:
   void setLineIndex(uint32_t lineIndex) { lineIndex_ = lineIndex; }
 
   void setIsReferenceBaseline(bool isReferenceBaseline) {
-    isReferenceBaseline_ = isReferenceBaseline;
+    facebook::yoga::detail::setBooleanData(
+        flags, isReferenceBaseline_, isReferenceBaseline);
   }
 
   void setOwner(YGNodeRef owner) { owner_ = owner; }
@@ -321,3 +344,5 @@ public:
   bool isLayoutTreeEqualToNode(const YGNode& node) const;
   void reset();
 };
+
+#endif

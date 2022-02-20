@@ -1,13 +1,16 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
- * This source code is licensed under the MIT license found in the LICENSE
- * file in the root directory of this source tree.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
+
 #pragma once
+
+#ifdef __cplusplus
+
 #include <algorithm>
 #include <array>
-#include <bitset>
 #include <cstdint>
 #include <type_traits>
 #include "CompactValue.h"
@@ -15,52 +18,42 @@
 #include "YGFloatOptional.h"
 #include "Yoga-internal.h"
 #include "Yoga.h"
+#include "BitUtils.h"
 
-#if !defined(ENUM_BITFIELDS_NOT_SUPPORTED)
-#define BITFIELD_ENUM_SIZED(num) : num
-#else
-#define BITFIELD_ENUM_SIZED(num)
-#endif
-
-#define BITFIELD_ACCESSORS(FIELD)                             \
-  decltype(FIELD##_) get_##FIELD() const { return FIELD##_; } \
-  void set_##FIELD(decltype(FIELD##_) x) { FIELD##_ = x; }
-
-#define BITFIELD_REF(FIELD)  \
-  BitfieldRef<               \
-      decltype(FIELD##_),    \
-      &YGStyle::get_##FIELD, \
-      &YGStyle::set_##FIELD, \
-      FIELD##Bit>
-
-class YGStyle {
+class YOGA_EXPORT YGStyle {
   template <typename Enum>
   using Values =
       facebook::yoga::detail::Values<facebook::yoga::enums::count<Enum>()>;
   using CompactValue = facebook::yoga::detail::CompactValue;
 
-  static constexpr uint64_t allBits(int fromBit, int toBit) {
-    return fromBit < toBit
-        ? (uint64_t{1} << fromBit) | allBits(fromBit + 1, toBit)
-        : 0;
-  }
-
 public:
   using Dimensions = Values<YGDimension>;
   using Edges = Values<YGEdge>;
 
-  template <typename T, T YGStyle::*Prop, int PropBit>
-  struct Ref {
+  template <typename T>
+  struct BitfieldRef {
     YGStyle& style;
-    operator T() const { return style.*Prop; }
-    Ref<T, Prop, PropBit>& operator=(T value) {
-      style.*Prop = value;
-      style.assignedProps_.set(PropBit);
+    size_t offset;
+    operator T() const {
+      return facebook::yoga::detail::getEnumData<T>(style.flags, offset);
+    }
+    BitfieldRef<T>& operator=(T x) {
+      facebook::yoga::detail::setEnumData<T>(style.flags, offset, x);
       return *this;
     }
   };
 
-  template <typename Idx, Values<Idx> YGStyle::*Prop, int PropBit>
+  template <typename T, T YGStyle::*Prop>
+  struct Ref {
+    YGStyle& style;
+    operator T() const { return style.*Prop; }
+    Ref<T, Prop>& operator=(T value) {
+      style.*Prop = value;
+      return *this;
+    }
+  };
+
+  template <typename Idx, Values<Idx> YGStyle::*Prop>
   struct IdxRef {
     struct Ref {
       YGStyle& style;
@@ -69,16 +62,13 @@ public:
       operator YGValue() const { return (style.*Prop)[idx]; }
       Ref& operator=(CompactValue value) {
         (style.*Prop)[idx] = value;
-        style.assignedProps_.set(PropBit + idx);
         return *this;
       }
     };
 
     YGStyle& style;
-    IdxRef<Idx, Prop, PropBit>& operator=(const Values<Idx>& values) {
+    IdxRef<Idx, Prop>& operator=(const Values<Idx>& values) {
       style.*Prop = values;
-      style.assignedProps_ |=
-          allBits(PropBit, PropBit + facebook::yoga::enums::count<Idx>());
       return *this;
     }
     operator const Values<Idx>&() const { return style.*Prop; }
@@ -86,82 +76,35 @@ public:
     CompactValue operator[](Idx idx) const { return (style.*Prop)[idx]; }
   };
 
-  template <
-      typename T,
-      T (YGStyle::*Get)() const,
-      void (YGStyle::*Set)(T),
-      int PropBit>
-  struct BitfieldRef {
-    YGStyle& style;
-
-    operator T() const { return (style.*Get)(); }
-    BitfieldRef<T, Get, Set, PropBit>& operator=(T x) {
-      (style.*Set)(x);
-      style.assignedProps_.set(PropBit);
-      return *this;
-    }
-  };
-
-  YGStyle()
-      : direction_(YGDirectionInherit),
-        flexDirection_(YGFlexDirectionColumn),
-        justifyContent_(YGJustifyFlexStart),
-        alignContent_(YGAlignFlexStart),
-        alignItems_(YGAlignStretch),
-        alignSelf_(YGAlignAuto),
-        positionType_(YGPositionTypeRelative),
-        flexWrap_(YGWrapNoWrap),
-        overflow_(YGOverflowVisible),
-        display_(YGDisplayFlex) {}
+  YGStyle() {
+    alignContent() = YGAlignFlexStart;
+    alignItems() = YGAlignStretch;
+  }
   ~YGStyle() = default;
 
-  static constexpr int directionBit = 0;
-  static constexpr int flexDirectionBit = directionBit + 1;
-  static constexpr int justifyContentBit = flexDirectionBit + 1;
-  static constexpr int alignContentBit = justifyContentBit + 1;
-  static constexpr int alignItemsBit = alignContentBit + 1;
-  static constexpr int alignSelfBit = alignItemsBit + 1;
-  static constexpr int positionTypeBit = alignSelfBit + 1;
-  static constexpr int flexWrapBit = positionTypeBit + 1;
-  static constexpr int overflowBit = flexWrapBit + 1;
-  static constexpr int displayBit = overflowBit + 1;
-  static constexpr int flexBit = displayBit + 1;
-  static constexpr int flexGrowBit = flexBit + 1;
-  static constexpr int flexShrinkBit = flexGrowBit + 1;
-  static constexpr int flexBasisBit = flexShrinkBit + 1;
-  static constexpr int marginBit = flexBasisBit + 1;
-  static constexpr int positionBit =
-      marginBit + facebook::yoga::enums::count<YGEdge>();
-  static constexpr int paddingBit =
-      positionBit + facebook::yoga::enums::count<YGEdge>();
-  static constexpr int borderBit =
-      paddingBit + facebook::yoga::enums::count<YGEdge>();
-  static constexpr int dimensionsBit =
-      borderBit + facebook::yoga::enums::count<YGEdge>();
-  static constexpr int maxDimensionsBit =
-      dimensionsBit + facebook::yoga::enums::count<YGDimension>();
-  static constexpr int minDimensionsBit =
-      maxDimensionsBit + facebook::yoga::enums::count<YGDimension>();
-  static constexpr int aspectRatioBit =
-      minDimensionsBit + facebook::yoga::enums::count<YGDimension>();
-
-  static constexpr int numStyles = aspectRatioBit + 1;
-
 private:
-  std::bitset<aspectRatioBit + 1> assignedProps_;
+  static constexpr size_t directionOffset = 0;
+  static constexpr size_t flexdirectionOffset =
+      directionOffset + facebook::yoga::detail::bitWidthFn<YGDirection>();
+  static constexpr size_t justifyContentOffset = flexdirectionOffset +
+      facebook::yoga::detail::bitWidthFn<YGFlexDirection>();
+  static constexpr size_t alignContentOffset =
+      justifyContentOffset + facebook::yoga::detail::bitWidthFn<YGJustify>();
+  static constexpr size_t alignItemsOffset =
+      alignContentOffset + facebook::yoga::detail::bitWidthFn<YGAlign>();
+  static constexpr size_t alignSelfOffset =
+      alignItemsOffset + facebook::yoga::detail::bitWidthFn<YGAlign>();
+  static constexpr size_t positionTypeOffset =
+      alignSelfOffset + facebook::yoga::detail::bitWidthFn<YGAlign>();
+  static constexpr size_t flexWrapOffset =
+      positionTypeOffset + facebook::yoga::detail::bitWidthFn<YGPositionType>();
+  static constexpr size_t overflowOffset =
+      flexWrapOffset + facebook::yoga::detail::bitWidthFn<YGWrap>();
+  static constexpr size_t displayOffset =
+      overflowOffset + facebook::yoga::detail::bitWidthFn<YGOverflow>();
 
-  /* Some platforms don't support enum bitfields,
-     so please use BITFIELD_ENUM_SIZED(BITS_COUNT) */
-  YGDirection direction_ BITFIELD_ENUM_SIZED(2);
-  YGFlexDirection flexDirection_ BITFIELD_ENUM_SIZED(2);
-  YGJustify justifyContent_ BITFIELD_ENUM_SIZED(3);
-  YGAlign alignContent_ BITFIELD_ENUM_SIZED(3);
-  YGAlign alignItems_ BITFIELD_ENUM_SIZED(3);
-  YGAlign alignSelf_ BITFIELD_ENUM_SIZED(3);
-  YGPositionType positionType_ BITFIELD_ENUM_SIZED(1);
-  YGWrap flexWrap_ BITFIELD_ENUM_SIZED(2);
-  YGOverflow overflow_ BITFIELD_ENUM_SIZED(2);
-  YGDisplay display_ BITFIELD_ENUM_SIZED(1);
+  uint32_t flags = 0;
+
   YGFloatOptional flex_ = {};
   YGFloatOptional flexGrow_ = {};
   YGFloatOptional flexShrink_ = {};
@@ -176,116 +119,118 @@ private:
   // Yoga specific properties, not compatible with flexbox specification
   YGFloatOptional aspectRatio_ = {};
 
-  BITFIELD_ACCESSORS(direction)
-  BITFIELD_ACCESSORS(flexDirection)
-  BITFIELD_ACCESSORS(justifyContent)
-  BITFIELD_ACCESSORS(alignContent);
-  BITFIELD_ACCESSORS(alignItems);
-  BITFIELD_ACCESSORS(alignSelf);
-  BITFIELD_ACCESSORS(positionType);
-  BITFIELD_ACCESSORS(flexWrap);
-  BITFIELD_ACCESSORS(overflow);
-  BITFIELD_ACCESSORS(display);
-
 public:
-  const decltype(assignedProps_)& assignedProps() const {
-    return assignedProps_;
-  }
-
   // for library users needing a type
   using ValueRepr = std::remove_reference<decltype(margin_[0])>::type;
 
-  YGDirection direction() const { return direction_; }
-  BITFIELD_REF(direction) direction() { return {*this}; }
+  YGDirection direction() const {
+    return facebook::yoga::detail::getEnumData<YGDirection>(
+        flags, directionOffset);
+  }
+  BitfieldRef<YGDirection> direction() { return {*this, directionOffset}; }
 
-  YGFlexDirection flexDirection() const { return flexDirection_; }
-  BITFIELD_REF(flexDirection) flexDirection() { return {*this}; }
+  YGFlexDirection flexDirection() const {
+    return facebook::yoga::detail::getEnumData<YGFlexDirection>(
+        flags, flexdirectionOffset);
+  }
+  BitfieldRef<YGFlexDirection> flexDirection() {
+    return {*this, flexdirectionOffset};
+  }
 
-  YGJustify justifyContent() const { return justifyContent_; }
-  BITFIELD_REF(justifyContent) justifyContent() { return {*this}; }
+  YGJustify justifyContent() const {
+    return facebook::yoga::detail::getEnumData<YGJustify>(
+        flags, justifyContentOffset);
+  }
+  BitfieldRef<YGJustify> justifyContent() {
+    return {*this, justifyContentOffset};
+  }
 
-  YGAlign alignContent() const { return alignContent_; }
-  BITFIELD_REF(alignContent) alignContent() { return {*this}; }
+  YGAlign alignContent() const {
+    return facebook::yoga::detail::getEnumData<YGAlign>(
+        flags, alignContentOffset);
+  }
+  BitfieldRef<YGAlign> alignContent() { return {*this, alignContentOffset}; }
 
-  YGAlign alignItems() const { return alignItems_; }
-  BITFIELD_REF(alignItems) alignItems() { return {*this}; }
+  YGAlign alignItems() const {
+    return facebook::yoga::detail::getEnumData<YGAlign>(
+        flags, alignItemsOffset);
+  }
+  BitfieldRef<YGAlign> alignItems() { return {*this, alignItemsOffset}; }
 
-  YGAlign alignSelf() const { return alignSelf_; }
-  BITFIELD_REF(alignSelf) alignSelf() { return {*this}; }
+  YGAlign alignSelf() const {
+    return facebook::yoga::detail::getEnumData<YGAlign>(flags, alignSelfOffset);
+  }
+  BitfieldRef<YGAlign> alignSelf() { return {*this, alignSelfOffset}; }
 
-  YGPositionType positionType() const { return positionType_; }
-  BITFIELD_REF(positionType) positionType() { return {*this}; }
+  YGPositionType positionType() const {
+    return facebook::yoga::detail::getEnumData<YGPositionType>(
+        flags, positionTypeOffset);
+  }
+  BitfieldRef<YGPositionType> positionType() {
+    return {*this, positionTypeOffset};
+  }
 
-  YGWrap flexWrap() const { return flexWrap_; }
-  BITFIELD_REF(flexWrap) flexWrap() { return {*this}; }
+  YGWrap flexWrap() const {
+    return facebook::yoga::detail::getEnumData<YGWrap>(flags, flexWrapOffset);
+  }
+  BitfieldRef<YGWrap> flexWrap() { return {*this, flexWrapOffset}; }
 
-  YGOverflow overflow() const { return overflow_; }
-  BITFIELD_REF(overflow) overflow() { return {*this}; }
+  YGOverflow overflow() const {
+    return facebook::yoga::detail::getEnumData<YGOverflow>(
+        flags, overflowOffset);
+  }
+  BitfieldRef<YGOverflow> overflow() { return {*this, overflowOffset}; }
 
-  YGDisplay display() const { return display_; }
-  BITFIELD_REF(display) display() { return {*this}; }
+  YGDisplay display() const {
+    return facebook::yoga::detail::getEnumData<YGDisplay>(flags, displayOffset);
+  }
+  BitfieldRef<YGDisplay> display() { return {*this, displayOffset}; }
 
   YGFloatOptional flex() const { return flex_; }
-  Ref<YGFloatOptional, &YGStyle::flex_, flexBit> flex() { return {*this}; }
+  Ref<YGFloatOptional, &YGStyle::flex_> flex() { return {*this}; }
 
   YGFloatOptional flexGrow() const { return flexGrow_; }
-  Ref<YGFloatOptional, &YGStyle::flexGrow_, flexGrowBit> flexGrow() {
-    return {*this};
-  }
+  Ref<YGFloatOptional, &YGStyle::flexGrow_> flexGrow() { return {*this}; }
 
   YGFloatOptional flexShrink() const { return flexShrink_; }
-  Ref<YGFloatOptional, &YGStyle::flexShrink_, flexShrinkBit> flexShrink() {
-    return {*this};
-  }
+  Ref<YGFloatOptional, &YGStyle::flexShrink_> flexShrink() { return {*this}; }
 
   CompactValue flexBasis() const { return flexBasis_; }
-  Ref<CompactValue, &YGStyle::flexBasis_, flexBasisBit> flexBasis() {
-    return {*this};
-  }
+  Ref<CompactValue, &YGStyle::flexBasis_> flexBasis() { return {*this}; }
 
   const Edges& margin() const { return margin_; }
-  IdxRef<YGEdge, &YGStyle::margin_, marginBit> margin() { return {*this}; }
+  IdxRef<YGEdge, &YGStyle::margin_> margin() { return {*this}; }
 
   const Edges& position() const { return position_; }
-  IdxRef<YGEdge, &YGStyle::position_, positionBit> position() {
-    return {*this};
-  }
+  IdxRef<YGEdge, &YGStyle::position_> position() { return {*this}; }
 
   const Edges& padding() const { return padding_; }
-  IdxRef<YGEdge, &YGStyle::padding_, paddingBit> padding() { return {*this}; }
+  IdxRef<YGEdge, &YGStyle::padding_> padding() { return {*this}; }
 
   const Edges& border() const { return border_; }
-  IdxRef<YGEdge, &YGStyle::border_, borderBit> border() { return {*this}; }
+  IdxRef<YGEdge, &YGStyle::border_> border() { return {*this}; }
 
   const Dimensions& dimensions() const { return dimensions_; }
-  IdxRef<YGDimension, &YGStyle::dimensions_, dimensionsBit> dimensions() {
-    return {*this};
-  }
+  IdxRef<YGDimension, &YGStyle::dimensions_> dimensions() { return {*this}; }
 
   const Dimensions& minDimensions() const { return minDimensions_; }
-  IdxRef<YGDimension, &YGStyle::minDimensions_, minDimensionsBit>
-  minDimensions() {
+  IdxRef<YGDimension, &YGStyle::minDimensions_> minDimensions() {
     return {*this};
   }
 
   const Dimensions& maxDimensions() const { return maxDimensions_; }
-  IdxRef<YGDimension, &YGStyle::maxDimensions_, maxDimensionsBit>
-  maxDimensions() {
+  IdxRef<YGDimension, &YGStyle::maxDimensions_> maxDimensions() {
     return {*this};
   }
 
   // Yoga specific properties, not compatible with flexbox specification
   YGFloatOptional aspectRatio() const { return aspectRatio_; }
-  Ref<YGFloatOptional, &YGStyle::aspectRatio_, aspectRatioBit> aspectRatio() {
-    return {*this};
-  }
+  Ref<YGFloatOptional, &YGStyle::aspectRatio_> aspectRatio() { return {*this}; }
 };
 
-bool operator==(const YGStyle& lhs, const YGStyle& rhs);
-inline bool operator!=(const YGStyle& lhs, const YGStyle& rhs) {
+YOGA_EXPORT bool operator==(const YGStyle& lhs, const YGStyle& rhs);
+YOGA_EXPORT inline bool operator!=(const YGStyle& lhs, const YGStyle& rhs) {
   return !(lhs == rhs);
 }
 
-#undef BITFIELD_ENUM_SIZED
-#undef BITFIELD_ACCESSORS
-#undef BITFIELD_REF
+#endif
