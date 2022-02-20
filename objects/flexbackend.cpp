@@ -7,14 +7,14 @@ namespace Objects {
 
 FlexBackend::FlexBackend(QObject *parent)
   : QObject(parent) {
-    qDebug() << "FlexBackend ctor";
+    //qDebug() << "FlexBackend ctor";
     config = new FlexConfig(this);
 }
 
 /*---------------------------------------------------------------------------*/
 
 FlexBackend::~FlexBackend() {
-    qDebug() << "FlexBackend dtor";
+    //qDebug() << "FlexBackend dtor";
 }
 
 /*---------------------------------------------------------------------------*/

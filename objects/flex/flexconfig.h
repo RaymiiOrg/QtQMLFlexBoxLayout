@@ -3,8 +3,7 @@
 
 #include <QtDebug>
 #include <QObject>
-
-#include "third_party/yoga/Yoga.h"
+#include "../../Yoga.h"
 
 namespace Quite {
 namespace Objects {

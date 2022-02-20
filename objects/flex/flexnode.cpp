@@ -8,7 +8,7 @@ namespace Flex {
 
 FlexNode::FlexNode(FlexConfig* config, QObject* parent)
   : QObject(parent) {
-    qDebug() << "FlexNode ctor";
+    //qDebug() << "FlexNode ctor";
     node = YGNodeNewWithConfig(config->getConfig());
     this->config = config;
 }
@@ -16,7 +16,7 @@ FlexNode::FlexNode(FlexConfig* config, QObject* parent)
 /*---------------------------------------------------------------------------*/
 
 FlexNode::~FlexNode() {
-    qDebug() << "FlexNode dtor";
+    //qDebug() << "FlexNode dtor";
     YGNodeFree(node);
 }
 
@@ -461,12 +461,22 @@ void FlexNode::setPaddingBottom(int point) {
 /*---------------------------------------------------------------------------*/
 
 void FlexNode::calculateLayoutLtr(int width, int height) {
-    YGNodeCalculateLayout(
-        node,
-        static_cast<float>(width),
-        static_cast<float>(height),
-        YGDirectionLTR
-    );
+    if(height == -1) {
+        YGNodeCalculateLayout(
+            node,
+            static_cast<float>(width),
+            YGUndefined,
+            YGDirectionLTR
+        );
+    } else {
+        YGNodeCalculateLayout(
+            node,
+            static_cast<float>(width),
+            static_cast<float>(height),
+            YGDirectionLTR
+        );
+    }
+
 }
 
 /*---------------------------------------------------------------------------*/
@@ -489,6 +499,7 @@ void FlexNode::calculateLayoutRtl(int width, int height) {
         static_cast<float>(height),
         YGDirectionRTL
     );
+
 }
 
 /*---------------------------------------------------------------------------*/

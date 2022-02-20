@@ -6,8 +6,8 @@
 #include <QVariant>
 #include <QJSValue>
 
-#include "objects/flex/flexconfig.h"
-#include "third_party/yoga/Yoga.h"
+#include "flexconfig.h"
+#include "../../Yoga.h"
 
 namespace Quite {
 namespace Objects {
