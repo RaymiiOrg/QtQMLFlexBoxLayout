@@ -1,6 +1,6 @@
-import QtQuick 2.10
-import QtQuick.Layouts 1.1
-import com.tripolskypetr.quitejs 1.0
+import QtQuick
+import QtQuick.Layouts
+import QtYoga
 
 Item {
     id: flex

@@ -8,8 +8,8 @@
 
 #include <functional>
 #include <vector>
-#include "third_party/yoga/YGEnums.h"
-#include "third_party/yoga/YGMarker.h"
+#include "YGEnums.h"
+#include "YGMarker.h"
 
 struct YGConfig;
 struct YGNode;

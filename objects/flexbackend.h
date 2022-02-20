@@ -6,10 +6,10 @@
 #include <QVariant>
 #include <QQmlContext>
 
-#include "objects/flex/flexconfig.h"
-#include "objects/flex/flexnode.h"
+#include "flex/flexconfig.h"
+#include "flex/flexnode.h"
 
-#include "third_party/yoga/Yoga.h"
+#include "../Yoga.h"
 
 using namespace Quite::Objects::Flex;
 
