@@ -4,7 +4,7 @@
 * Installation
 
 `CMakeLists.txt`
-```
+```cmake
 ...
 
 add_subdirectory(QtYoga)
@@ -16,7 +16,7 @@ target_link_libraries(... QtYogaplugin)
 ```
 
 `main.cpp`
-```
+```cpp
 ...
 #include <QtYoga/objects/flexbackend.h>
 
@@ -30,7 +30,7 @@ using namespace Quite::Objects;
 
 
 qml demo code
-```
+```qml
 import QtQuick
 import QtQuick.Controls
 import QtYoga
